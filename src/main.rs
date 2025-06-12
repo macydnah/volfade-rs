@@ -27,52 +27,7 @@ const INC_VOL_STEP: f64 = 0.01375;
 const DEC_VOL_STEP: f64 = 0.017;
 // const FADE_IN_STEP: f64 = 0.025;
 // const FADE_OUT_STEP: f64 = 0.04;
-const MILLISECONDS: time::Duration = time::Duration::from_millis(26);
-
-#[derive(Parser)]
-/// Change volume levels with smooth fade transitions for PulseAudio.
-#[command(version, long_about = None, rename_all = "kebab-case",
-    override_usage = "<operation> [-h | --help]",
-    help_template = "
-{usage-heading} {name} {usage}\n
-{tab}{about}\n
-Operations:
-    -i, --inc          increase volume in crescendo
-    -d, --dec          decrease volume in diminuendo
-    -m, --mute         al niente (fade out to mute)
-    -u, --unmute       dal niente (fade in from mute)
-    -t, --toggle-mute  Toggle al niente/dal niente
-
-Options:
-    -h, --help        Print help
-    -V, --version     Print version
-
-Operations are mutually exclusive, e.g. the volume levels
-can't be increased and decreased at the same time
-"
-)]
-#[group(id = "dynamics", required = true, multiple = false)]
-struct Cli {
-    /// increase volume in crescendo
-    #[arg(short, long = "inc", group = "dynamics")]
-    increase: bool,
-
-    /// decrease volume in diminuendo
-    #[arg(short, long = "dec", group = "dynamics")]
-    decrease: bool,
-
-    /// al niente (fade out to mute)
-    #[arg(short, long, group = "dynamics")]
-    mute: bool,
-
-    /// dal niente (fade in from mute)
-    #[arg(short, long, group = "dynamics")]
-    unmute: bool,
-
-    /// toggle al niente/dal niente
-    #[arg(short, long, group = "dynamics")]
-    toggle_mute: bool,
-}
+const WAIT_BETWEEN_STEPS: time::Duration = time::Duration::from_millis(26);
 
 fn get_vol(handler: &mut SinkController) -> Volume {
     let default_device: DeviceInfo = handler
@@ -86,7 +41,7 @@ fn dec_vol(handler: &mut SinkController, device_index: u32) {
     let mut i = 0;
     while i <= 7 {
         handler.decrease_device_volume_by_percent(device_index, DEC_VOL_STEP);
-        thread::sleep(MILLISECONDS);
+        thread::sleep(WAIT_BETWEEN_STEPS);
         i += 1;
     };
 }
@@ -96,7 +51,7 @@ fn inc_vol(handler: &mut SinkController, device_index: u32) {
     let mut i = 0;
     while i <= 7 {
         handler.increase_device_volume_by_percent(device_index, INC_VOL_STEP);
-        thread::sleep(MILLISECONDS);
+        thread::sleep(WAIT_BETWEEN_STEPS);
         i += 1;
     };
 }
@@ -133,6 +88,51 @@ fn toggle_mute(handler: &mut SinkController, device_index: u32) {
     } else {
         unmute(handler, device_index);
     };
+}
+
+#[derive(Parser)]
+/// Change volume levels with smooth fade transitions for PulseAudio.
+#[command(override_usage = "[-h] <operation>", help_template =
+"
+{usage-heading} {name} {usage}\n
+{tab}{about}\n
+Operations:
+    -i, --inc          increase volume in crescendo
+    -d, --dec          decrease volume in diminuendo
+    -m, --mute         al niente (fade out to mute)
+    -u, --unmute       dal niente (fade in from mute)
+    -t, --toggle-mute  Toggle al niente/dal niente
+
+Options:
+    -h, --help         Print help
+    -V, --version      Print version
+
+Operations are mutually exclusive, e.g. the volume levels
+can't be increased and decreased at the same time
+"
+)]
+#[command(version, long_about = None, rename_all = "kebab-case")]
+#[group(id = "dynamics", required = true, multiple = false)]
+struct Cli {
+    /// increase volume in crescendo
+    #[arg(short, long = "inc", group = "dynamics")]
+    increase: bool,
+
+    /// decrease volume in diminuendo
+    #[arg(short, long = "dec", group = "dynamics")]
+    decrease: bool,
+
+    /// al niente (fade out to mute)
+    #[arg(short, long, group = "dynamics")]
+    mute: bool,
+
+    /// dal niente (fade in from mute)
+    #[arg(short, long, group = "dynamics")]
+    unmute: bool,
+
+    /// toggle al niente/dal niente
+    #[arg(short, long, group = "dynamics")]
+    toggle_mute: bool,
 }
 
 fn main() {
