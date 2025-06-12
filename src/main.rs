@@ -1,4 +1,4 @@
-// volfade-rs — smooth volume transitions for PulseAudio
+// volfade-rs — Smooth volume transitions for PulseAudio
 //
 // Copyright (C) 2024  Juan de Dios Hernández <
 //
@@ -23,28 +23,54 @@ use pulsectl::controllers::DeviceControl;
 use pulsectl::controllers::SinkController;
 use pulsectl::controllers::types::DeviceInfo;
 
-// parse command line arguments
+const INC_VOL_STEP: f64 = 0.01375;
+const DEC_VOL_STEP: f64 = 0.017;
+// const FADE_IN_STEP: f64 = 0.025;
+// const FADE_OUT_STEP: f64 = 0.04;
+const MILLISECONDS: time::Duration = time::Duration::from_millis(26);
+
 #[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-struct Args {
+/// Change volume levels with smooth fade transitions for PulseAudio.
+#[command(version, long_about = None, rename_all = "kebab-case",
+    override_usage = "<operation> [-h | --help]",
+    help_template = "
+{usage-heading} {name} {usage}\n
+{tab}{about}\n
+Operations:
+    -i, --inc          increase volume in crescendo
+    -d, --dec          decrease volume in diminuendo
+    -m, --mute         al niente (fade out to mute)
+    -u, --unmute       dal niente (fade in from mute)
+    -t, --toggle-mute  Toggle al niente/dal niente
+
+Options:
+    -h, --help        Print help
+    -V, --version     Print version
+
+Operations are mutually exclusive, e.g. the volume levels
+can't be increased and decreased at the same time
+"
+)]
+#[group(id = "dynamics", required = true, multiple = false)]
+struct Cli {
     /// increase volume in crescendo
-    #[arg(short, long)]
+    #[arg(short, long = "inc", group = "dynamics")]
     increase: bool,
 
     /// decrease volume in diminuendo
-    #[arg(short, long)]
+    #[arg(short, long = "dec", group = "dynamics")]
     decrease: bool,
 
-    /// al niente (fade out)
-    #[arg(short, long)]
+    /// al niente (fade out to mute)
+    #[arg(short, long, group = "dynamics")]
     mute: bool,
 
-    /// dal niente (fade in)
-    #[arg(short, long)]
+    /// dal niente (fade in from mute)
+    #[arg(short, long, group = "dynamics")]
     unmute: bool,
 
     /// toggle al niente/dal niente
-    #[arg(short, long)]
+    #[arg(short, long, group = "dynamics")]
     toggle_mute: bool,
 }
 
@@ -56,73 +82,34 @@ fn get_vol(handler: &mut SinkController) -> Volume {
     default_device.volume.avg()
 }
 
-fn dec_vol(handler: &mut SinkController, device_index: u32, steps: Option<f64>) {
-    let ms = time::Duration::from_millis(100);
+fn dec_vol(handler: &mut SinkController, device_index: u32) {
     let mut i = 0;
     while i <= 7 {
-        // handler.decrease_device_volume_by_percent(device_index, 0.017);
-        handler.decrease_device_volume_by_percent(device_index, steps.unwrap_or(0.017));
-        thread::sleep(ms);
+        handler.decrease_device_volume_by_percent(device_index, DEC_VOL_STEP);
+        thread::sleep(MILLISECONDS);
         i += 1;
     };
 }
 
-fn inc_vol(handler: &mut SinkController, device_index: u32, steps: Option<f64>) {
+fn inc_vol(handler: &mut SinkController, device_index: u32) {
     handler.set_device_mute_by_index(device_index, false);
-    let ms = time::Duration::from_millis(100);
     let mut i = 0;
     while i <= 7 {
-        // handler.increase_device_volume_by_percent(device_index, 0.01375);
-        handler.increase_device_volume_by_percent(device_index, steps.unwrap_or(0.01375));
-        thread::sleep(ms);
+        handler.increase_device_volume_by_percent(device_index, INC_VOL_STEP);
+        thread::sleep(MILLISECONDS);
         i += 1;
-    };
-}
-
-fn toggle_mute(handler: &mut SinkController, device_index: u32) {
-
-    let pre_vol = get_vol(handler).0.to_string();
-    println!("the previous volume was: {}", pre_vol);
-    let open_pre_vol_file = env::temp_dir().join("pre_vol");
-
-    if get_vol(handler).gt(&Volume::MUTED) {
-        // save previous volume to a file
-        fs::write(open_pre_vol_file, pre_vol).expect("Unable to write pre_vol file");
-
-        // fade out
-        // while handler.get_device_by_index(device_index).unwrap().volume.avg().gt(&Volume::MUTED) {
-        while get_vol(handler).gt(&Volume::MUTED) {
-            dec_vol(handler, device_index, Some(0.04));
-            println!("Current volume after dec_vol: {}", handler.get_device_by_index(device_index).unwrap().volume.avg());
-        };
-        handler.set_device_mute_by_index(device_index, true);
-    } else {
-        // read previous volume from file
-        let saved_str = fs::read_to_string("/tmp/pre_vol").expect("Failed to read volume");
-        let saved_val: u32 = saved_str.trim().parse().expect("Failed to parse volume");
-        let target_volume = Volume(saved_val);
-        println!("Target volume for fade in: {}", target_volume.0.to_string());
-
-        // fade in
-        handler.set_device_mute_by_index(device_index, false);
-        while get_vol(handler).lt(&target_volume) {
-            inc_vol(handler, device_index, Some(0.025));
-            println!("Current volume after inc_vol: {}", handler.get_device_by_index(device_index).unwrap().volume.avg());
-        };
     };
 }
 
 fn mute(handler: &mut SinkController, device_index: u32) {
+    // save previous volume to a file in case we want to fade in later
     let pre_vol = get_vol(handler).0.to_string();
     let open_pre_vol_file = env::temp_dir().join("pre_vol");
-
-    // save previous volume to a file
     fs::write(open_pre_vol_file, pre_vol).expect("Unable to write pre_vol file");
 
     // fade out
     while get_vol(handler).gt(&Volume::MUTED) {
-        dec_vol(handler, device_index, Some(0.04));
-        // println!("Current volume after dec_vol: {}", handler.get_device_by_index(device_index).unwrap().volume.avg());
+        dec_vol(handler, device_index);
     };
     handler.set_device_mute_by_index(device_index, true);
 }
@@ -132,18 +119,24 @@ fn unmute(handler: &mut SinkController, device_index: u32) {
     let saved_str = fs::read_to_string("/tmp/pre_vol").expect("Failed to read volume");
     let saved_val: u32 = saved_str.trim().parse().expect("Failed to parse volume");
     let target_volume = Volume(saved_val);
-    // println!("Target volume for fade in: {}", target_volume.0.to_string());
 
     // fade in
     handler.set_device_mute_by_index(device_index, false);
     while get_vol(handler).lt(&target_volume) {
-        inc_vol(handler, device_index, Some(0.025));
-        // println!("Current volume after inc_vol: {}", handler.get_device_by_index(device_index).unwrap().volume.avg());
+        inc_vol(handler, device_index);
+    };
+}
+
+fn toggle_mute(handler: &mut SinkController, device_index: u32) {
+    if get_vol(handler).gt(&Volume::MUTED) {
+        mute(handler, device_index);
+    } else {
+        unmute(handler, device_index);
     };
 }
 
 fn main() {
-    let args = Args::parse();
+    let args = Cli::parse();
 
     // create handler that calls functions on playback devices and apps
     let mut handler = SinkController::create().unwrap();
@@ -152,29 +145,32 @@ fn main() {
         .get_default_device()
         .expect("Could not get default playback device.");
 
+    // if args.increase && args.decrease {
+    //     println!("Cannot increase and decrease volume at the same time.");
+    // } else if args.increase && args.mute {
+    //     println!("Cannot increase volume while muting.");
+    // } else if args.decrease && args.mute {
+    //     println!("Already muting... Can it decrease volume at the same time?");
+    // }
 
-    if args.increase && args.decrease {
-        println!("Cannot increase and decrease volume at the same time.");
-    } else if args.increase && args.mute {
-        println!("Cannot increase volume while muting.");
-    } else if args.decrease && args.mute {
-        println!("Already muting... Can it decrease volume at the same time?");
-    } else if args.increase {
-        inc_vol(&mut handler, default_device.index, Some(0.01375));
-        println!("Volume increased.");
+    if args.increase {
+        print!("Crescendo\n");
+        inc_vol(&mut handler, default_device.index);
+
     } else if args.decrease {
-        dec_vol(&mut handler, default_device.index, Some(0.017));
-        println!("Volume decreased.");
+        print!("Diminuendo\n");
+        dec_vol(&mut handler, default_device.index);
+
     } else if args.mute {
+        print!("Diminuendo al niente\n");
         mute(&mut handler, default_device.index);
-        println!("Volume muted/unmuted with fade in/out.");
+
     } else if args.unmute {
+        print!("Crescendo dal niente\n");
         unmute(&mut handler, default_device.index);
-        println!("Volume unmuted with fade in.");
+
     } else if args.toggle_mute {
+        print!("Toggled mute state\n");
         toggle_mute(&mut handler, default_device.index);
-        println!("Volume toggled mute/unmute with fade in/out.");
-    } else {
-        println!("No action specified. Use --increase, --decrease, or --mute.");
     }
 }
