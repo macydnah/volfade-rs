@@ -23,10 +23,10 @@ use pulsectl::controllers::DeviceControl;
 use pulsectl::controllers::SinkController;
 use pulsectl::controllers::types::DeviceInfo;
 
-const INC_VOL_STEP: f64 = 0.01375;
-const DEC_VOL_STEP: f64 = 0.017;
-// const FADE_IN_STEP: f64 = 0.025;
-// const FADE_OUT_STEP: f64 = 0.04;
+const INC_PERCENT_STEP: f64 = 1.375 / 100.0;
+const DEC_PERCENT_STEP: f64 = 1.7 / 100.0;
+// const FADE_IN_PERCENT_STEP: f64 = 2.5 / 100.0;
+// const FADE_OUT_PERCENT_STEP: f64 = 4.0 / 100.0;
 const WAIT_BETWEEN_STEPS: time::Duration = time::Duration::from_millis(26);
 
 fn get_vol(handler: &mut SinkController) -> Volume {
@@ -40,7 +40,7 @@ fn get_vol(handler: &mut SinkController) -> Volume {
 fn dec_vol(handler: &mut SinkController, device_index: u32) {
     let mut i = 0;
     while i <= 7 {
-        handler.decrease_device_volume_by_percent(device_index, DEC_VOL_STEP);
+        handler.decrease_device_volume_by_percent(device_index, DEC_PERCENT_STEP);
         thread::sleep(WAIT_BETWEEN_STEPS);
         i += 1;
     };
@@ -50,7 +50,7 @@ fn inc_vol(handler: &mut SinkController, device_index: u32) {
     handler.set_device_mute_by_index(device_index, false);
     let mut i = 0;
     while i <= 7 {
-        handler.increase_device_volume_by_percent(device_index, INC_VOL_STEP);
+        handler.increase_device_volume_by_percent(device_index, INC_PERCENT_STEP);
         thread::sleep(WAIT_BETWEEN_STEPS);
         i += 1;
     };
