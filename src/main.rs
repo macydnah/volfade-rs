@@ -1,4 +1,4 @@
-// volfade-rs — Smooth volume transitions for PulseAudio
+// volfade-rs — Volfaders change the volume levels with smooth fading transitions
 //
 // Copyright (C) 2024  Juan de Dios Hernández <
 //
@@ -90,70 +90,38 @@ fn toggle_mute(handler: &mut SinkController, device_index: u32) {
     };
 }
 
-/// Volfaders change the volume levels with smooth fade transitions for PulseAudio.
+/// Volfaders change the volume levels with smooth fading transitions (for PulseAudio).
 #[derive(Parser)]
-// #[command(override_usage = "[-h] <operation>", help_template =
-// "
-// {usage-heading} {name} {usage}\n
-// {tab}{about}\n
-// Operations:
-//     -i, --inc          increase volume in crescendo
-//     -d, --dec          decrease volume in diminuendo
-//     -m, --mute         al niente (fade out to mute)
-//     -u, --unmute       dal niente (fade in from mute)
-//     -t, --toggle-mute  Toggle al niente/dal niente
-//
-// Options:
-//     -h, --help         Print help
-//     -V, --version      Print version
-//
-// Operations are mutually exclusive, e.g. the volume levels
-// can't be increased and decreased at the same time
-// "
-// )]
+#[command(author = "Juan de Dios Hernández, <86342863+macydnah@users.noreply.github.com>")]
 #[command(version, long_about = None, rename_all = "kebab-case")]
 #[group(id = "dynamics", required = false, multiple = false)]
 struct Cli {
     #[command(subcommand)]
     dynamics: Dynamics,
-
-    /// increase volume in crescendo
-    #[arg(short, long = "inc", group = "dynamics")]
-    increase: bool,
-
-    /// decrease volume in diminuendo
-    #[arg(short, long = "dec", group = "dynamics")]
-    decrease: bool,
-
-    /// al niente (fade out to mute)
-    #[arg(short, long, group = "dynamics")]
-    mute: bool,
-
-    /// dal niente (fade in from mute)
-    #[arg(short, long, group = "dynamics")]
-    unmute: bool,
-
-    /// toggle al niente/dal niente
-    #[arg(short, long, group = "dynamics")]
-    toggle_mute: bool,
 }
 
 /// Dynamics
 #[derive(Subcommand)]
+#[command(long_about = None, rename_all = "kebab-case")]
 enum Dynamics {
     /// increase volume in crescendo
-    Inc,
+    #[command(visible_alias = "i")]
+    Increase,
 
     /// decrease volume in diminuendo
-    Dec,
+    #[command(visible_alias = "d")]
+    Decrease,
 
     /// al niente (fade out to mute)
+    #[command(visible_alias = "m")]
     Mute,
 
     /// dal niente (fade in from mute)
+    #[command(visible_alias = "u")]
     Unmute,
 
     /// toggle al niente/dal niente
+    #[command(visible_alias = "t")]
     ToggleMute,
 }
 
@@ -167,36 +135,12 @@ fn main() {
         .get_default_device()
         .expect("Could not get default playback device.");
 
-    // match args {
-    //     Cli { increase: true, .. } => {
-    //         print!("Crescendo\n");
-    //         inc_vol(&mut handler, default_device.index);
-    //     }
-    //     Cli { decrease: true, .. } => {
-    //         print!("Diminuendo\n");
-    //         dec_vol(&mut handler, default_device.index);
-    //     }
-    //     Cli { mute: true, .. } => {
-    //         print!("Diminuendo al niente\n");
-    //         mute(&mut handler, default_device.index);
-    //     }
-    //     Cli { unmute: true, .. } => {
-    //         print!("Crescendo dal niente\n");
-    //         unmute(&mut handler, default_device.index);
-    //     }
-    //     Cli { toggle_mute: true, .. } => {
-    //         print!("Toggled mute state\n");
-    //         toggle_mute(&mut handler, default_device.index);
-    //     }
-    //     _ => {}
-    // }
-
     match args.dynamics {
-        Dynamics::Inc => {
+        Dynamics::Increase => {
             print!("Crescendo\n");
             inc_vol(&mut handler, default_device.index);
         }
-        Dynamics::Dec => {
+        Dynamics::Decrease => {
             print!("Diminuendo\n");
             dec_vol(&mut handler, default_device.index);
         }
