@@ -153,24 +153,48 @@ fn main() {
     //     println!("Already muting... Can it decrease volume at the same time?");
     // }
 
-    if args.increase {
-        print!("Crescendo\n");
-        inc_vol(&mut handler, default_device.index);
+    // if args.increase {
+    //     print!("Crescendo\n");
+    //     inc_vol(&mut handler, default_device.index);
+    //
+    // } else if args.decrease {
+    //     print!("Diminuendo\n");
+    //     dec_vol(&mut handler, default_device.index);
+    //
+    // } else if args.mute {
+    //     print!("Diminuendo al niente\n");
+    //     mute(&mut handler, default_device.index);
+    //
+    // } else if args.unmute {
+    //     print!("Crescendo dal niente\n");
+    //     unmute(&mut handler, default_device.index);
+    //
+    // } else if args.toggle_mute {
+    //     print!("Toggled mute state\n");
+    //     toggle_mute(&mut handler, default_device.index);
+    // }
 
-    } else if args.decrease {
-        print!("Diminuendo\n");
-        dec_vol(&mut handler, default_device.index);
-
-    } else if args.mute {
-        print!("Diminuendo al niente\n");
-        mute(&mut handler, default_device.index);
-
-    } else if args.unmute {
-        print!("Crescendo dal niente\n");
-        unmute(&mut handler, default_device.index);
-
-    } else if args.toggle_mute {
-        print!("Toggled mute state\n");
-        toggle_mute(&mut handler, default_device.index);
+    match args {
+        Cli { increase: true, .. } => {
+            print!("Crescendo\n");
+            inc_vol(&mut handler, default_device.index);
+        }
+        Cli { decrease: true, .. } => {
+            print!("Diminuendo\n");
+            dec_vol(&mut handler, default_device.index);
+        }
+        Cli { mute: true, .. } => {
+            print!("Diminuendo al niente\n");
+            mute(&mut handler, default_device.index);
+        }
+        Cli { unmute: true, .. } => {
+            print!("Crescendo dal niente\n");
+            unmute(&mut handler, default_device.index);
+        }
+        Cli { toggle_mute: true, .. } => {
+            print!("Toggled mute state\n");
+            toggle_mute(&mut handler, default_device.index);
+        }
+        _ => {}
     }
 }
