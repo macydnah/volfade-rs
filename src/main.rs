@@ -16,12 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use libpulse_binding::volume::Volume;
-use std::{env, fs, thread, time};
 use pulsectl::controllers::DeviceControl;
 use pulsectl::controllers::SinkController;
 use pulsectl::controllers::types::DeviceInfo;
+use std::{env, fs, thread, time};
 
 const INC_PERCENT_STEP: f64 = 1.375 / 100.0;
 const DEC_PERCENT_STEP: f64 = 1.7 / 100.0;
