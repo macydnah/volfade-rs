@@ -90,30 +90,33 @@ fn toggle_mute(handler: &mut SinkController, device_index: u32) {
     };
 }
 
+/// Volfaders change the volume levels with smooth fade transitions for PulseAudio.
 #[derive(Parser)]
-/// Change volume levels with smooth fade transitions for PulseAudio.
-#[command(override_usage = "[-h] <operation>", help_template =
-"
-{usage-heading} {name} {usage}\n
-{tab}{about}\n
-Operations:
-    -i, --inc          increase volume in crescendo
-    -d, --dec          decrease volume in diminuendo
-    -m, --mute         al niente (fade out to mute)
-    -u, --unmute       dal niente (fade in from mute)
-    -t, --toggle-mute  Toggle al niente/dal niente
-
-Options:
-    -h, --help         Print help
-    -V, --version      Print version
-
-Operations are mutually exclusive, e.g. the volume levels
-can't be increased and decreased at the same time
-"
-)]
+// #[command(override_usage = "[-h] <operation>", help_template =
+// "
+// {usage-heading} {name} {usage}\n
+// {tab}{about}\n
+// Operations:
+//     -i, --inc          increase volume in crescendo
+//     -d, --dec          decrease volume in diminuendo
+//     -m, --mute         al niente (fade out to mute)
+//     -u, --unmute       dal niente (fade in from mute)
+//     -t, --toggle-mute  Toggle al niente/dal niente
+//
+// Options:
+//     -h, --help         Print help
+//     -V, --version      Print version
+//
+// Operations are mutually exclusive, e.g. the volume levels
+// can't be increased and decreased at the same time
+// "
+// )]
 #[command(version, long_about = None, rename_all = "kebab-case")]
-#[group(id = "dynamics", required = true, multiple = false)]
+#[group(id = "dynamics", required = false, multiple = false)]
 struct Cli {
+    #[command(subcommand)]
+    dynamics: Dynamics,
+
     /// increase volume in crescendo
     #[arg(short, long = "inc", group = "dynamics")]
     increase: bool,
@@ -135,6 +138,25 @@ struct Cli {
     toggle_mute: bool,
 }
 
+/// Dynamics
+#[derive(Subcommand)]
+enum Dynamics {
+    /// increase volume in crescendo
+    Inc,
+
+    /// decrease volume in diminuendo
+    Dec,
+
+    /// al niente (fade out to mute)
+    Mute,
+
+    /// dal niente (fade in from mute)
+    Unmute,
+
+    /// toggle al niente/dal niente
+    ToggleMute,
+}
+
 fn main() {
     let args = Cli::parse();
 
@@ -145,56 +167,50 @@ fn main() {
         .get_default_device()
         .expect("Could not get default playback device.");
 
-    // if args.increase && args.decrease {
-    //     println!("Cannot increase and decrease volume at the same time.");
-    // } else if args.increase && args.mute {
-    //     println!("Cannot increase volume while muting.");
-    // } else if args.decrease && args.mute {
-    //     println!("Already muting... Can it decrease volume at the same time?");
+    // match args {
+    //     Cli { increase: true, .. } => {
+    //         print!("Crescendo\n");
+    //         inc_vol(&mut handler, default_device.index);
+    //     }
+    //     Cli { decrease: true, .. } => {
+    //         print!("Diminuendo\n");
+    //         dec_vol(&mut handler, default_device.index);
+    //     }
+    //     Cli { mute: true, .. } => {
+    //         print!("Diminuendo al niente\n");
+    //         mute(&mut handler, default_device.index);
+    //     }
+    //     Cli { unmute: true, .. } => {
+    //         print!("Crescendo dal niente\n");
+    //         unmute(&mut handler, default_device.index);
+    //     }
+    //     Cli { toggle_mute: true, .. } => {
+    //         print!("Toggled mute state\n");
+    //         toggle_mute(&mut handler, default_device.index);
+    //     }
+    //     _ => {}
     // }
 
-    // if args.increase {
-    //     print!("Crescendo\n");
-    //     inc_vol(&mut handler, default_device.index);
-    //
-    // } else if args.decrease {
-    //     print!("Diminuendo\n");
-    //     dec_vol(&mut handler, default_device.index);
-    //
-    // } else if args.mute {
-    //     print!("Diminuendo al niente\n");
-    //     mute(&mut handler, default_device.index);
-    //
-    // } else if args.unmute {
-    //     print!("Crescendo dal niente\n");
-    //     unmute(&mut handler, default_device.index);
-    //
-    // } else if args.toggle_mute {
-    //     print!("Toggled mute state\n");
-    //     toggle_mute(&mut handler, default_device.index);
-    // }
-
-    match args {
-        Cli { increase: true, .. } => {
+    match args.dynamics {
+        Dynamics::Inc => {
             print!("Crescendo\n");
             inc_vol(&mut handler, default_device.index);
         }
-        Cli { decrease: true, .. } => {
+        Dynamics::Dec => {
             print!("Diminuendo\n");
             dec_vol(&mut handler, default_device.index);
         }
-        Cli { mute: true, .. } => {
+        Dynamics::Mute => {
             print!("Diminuendo al niente\n");
             mute(&mut handler, default_device.index);
         }
-        Cli { unmute: true, .. } => {
+        Dynamics::Unmute => {
             print!("Crescendo dal niente\n");
             unmute(&mut handler, default_device.index);
         }
-        Cli { toggle_mute: true, .. } => {
+        Dynamics::ToggleMute => {
             print!("Toggled mute state\n");
             toggle_mute(&mut handler, default_device.index);
         }
-        _ => {}
-    }
+    };
 }
