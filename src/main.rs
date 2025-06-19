@@ -29,28 +29,30 @@ const DEC_PERCENT_STEP: f64 = 1.7 / 100.0;
 // const FADE_OUT_PERCENT_STEP: f64 = 4.0 / 100.0;
 const WAIT_BETWEEN_STEPS: time::Duration = time::Duration::from_millis(26);
 
-fn get_vol(handler: &mut SinkController) -> Volume {
+fn get_current_vol(handler: &mut SinkController) -> Volume {
     let default_device: DeviceInfo = handler
         .get_default_device()
         .expect("Could not get default playback device.");
 
-    default_device.volume.avg()
+    let device = default_device;
+
+    device.volume.avg()
 }
 
-fn dec_vol(handler: &mut SinkController, device_index: u32) {
+fn dec_vol(handler: &mut SinkController, dev_idx: u32) {
     let mut i = 0;
     while i <= 7 {
-        handler.decrease_device_volume_by_percent(device_index, DEC_PERCENT_STEP);
+        handler.decrease_device_volume_by_percent(dev_idx, DEC_PERCENT_STEP);
         thread::sleep(WAIT_BETWEEN_STEPS);
         i += 1;
     };
 }
 
-fn inc_vol(handler: &mut SinkController, device_index: u32) {
-    handler.set_device_mute_by_index(device_index, false);
+fn inc_vol(handler: &mut SinkController, dev_idx: u32) {
+    handler.set_device_mute_by_index(dev_idx, false);
     let mut i = 0;
     while i <= 7 {
-        handler.increase_device_volume_by_percent(device_index, INC_PERCENT_STEP);
+        handler.increase_device_volume_by_percent(dev_idx, INC_PERCENT_STEP);
         thread::sleep(WAIT_BETWEEN_STEPS);
         i += 1;
     };
@@ -66,16 +68,16 @@ fn pre_vol(handler: &mut SinkController, action: PreVolCommand) -> Option<Volume
     match action {
         PreVolCommand::Query => {
             // read previous volume from file
-            let bytes = fs::read(file)
+            let file = fs::read(file)
                 .expect("Failed to read pre_vol file");
-            let saved_vol = u32::from_le_bytes(bytes.try_into().expect("Failed to convert bytes to u32"));
+            let vol = u32::from_le_bytes(file.try_into().expect("Failed to convert bytes to u32"));
 
-            Some(Volume(saved_vol))
+            Some(Volume(vol))
         }
         PreVolCommand::Save => {
             // save current volume to a file
-            let pre_vol = get_vol(handler).0;
-            fs::write(file, pre_vol.to_le_bytes())
+            let vol = get_current_vol(handler).0;
+            fs::write(file, vol.to_le_bytes())
                 .expect("Unable to write pre_vol file");
 
             None
@@ -83,33 +85,33 @@ fn pre_vol(handler: &mut SinkController, action: PreVolCommand) -> Option<Volume
     }
 }
 
-fn mute(handler: &mut SinkController, device_index: u32) {
-    // save previous volume to a file in case we want to fade in later
+fn mute(handler: &mut SinkController, dev_idx: u32) {
+    // save current volume in case we want to fade in later
     pre_vol(handler, PreVolCommand::Save);
 
     // fade out
-    while get_vol(handler).gt(&Volume::MUTED) {
-        dec_vol(handler, device_index);
+    while get_current_vol(handler).gt(&Volume::MUTED) {
+        dec_vol(handler, dev_idx);
     };
-    handler.set_device_mute_by_index(device_index, true);
+    handler.set_device_mute_by_index(dev_idx, true);
 }
 
-fn unmute(handler: &mut SinkController, device_index: u32) {
+fn unmute(handler: &mut SinkController, dev_idx: u32) {
     // read previous volume from file
     let target_volume: Volume = pre_vol(handler, PreVolCommand::Query).unwrap();
 
     // fade in
-    handler.set_device_mute_by_index(device_index, false);
-    while get_vol(handler).lt(&target_volume) {
-        inc_vol(handler, device_index);
+    handler.set_device_mute_by_index(dev_idx, false);
+    while get_current_vol(handler).lt(&target_volume) {
+        inc_vol(handler, dev_idx);
     };
 }
 
-fn toggle_mute(handler: &mut SinkController, device_index: u32) {
-    if get_vol(handler).gt(&Volume::MUTED) {
-        mute(handler, device_index);
+fn toggle_mute(handler: &mut SinkController, dev_idx: u32) {
+    if get_current_vol(handler).gt(&Volume::MUTED) {
+        mute(handler, dev_idx);
     } else {
-        unmute(handler, device_index);
+        unmute(handler, dev_idx);
     };
 }
 
@@ -158,26 +160,28 @@ fn main() {
         .get_default_device()
         .expect("Could not get default playback device.");
 
+    let device = default_device;
+
     match args.dynamics {
         Dynamics::Increase => {
             print!("Crescendo\n");
-            inc_vol(&mut handler, default_device.index);
+            inc_vol(&mut handler, device.index);
         }
         Dynamics::Decrease => {
             print!("Diminuendo\n");
-            dec_vol(&mut handler, default_device.index);
+            dec_vol(&mut handler, device.index);
         }
         Dynamics::Mute => {
             print!("Diminuendo al niente\n");
-            mute(&mut handler, default_device.index);
+            mute(&mut handler, device.index);
         }
         Dynamics::Unmute => {
             print!("Crescendo dal niente\n");
-            unmute(&mut handler, default_device.index);
+            unmute(&mut handler, device.index);
         }
         Dynamics::ToggleMute => {
             print!("Toggled mute state\n");
-            toggle_mute(&mut handler, default_device.index);
+            toggle_mute(&mut handler, device.index);
         }
     };
 }
