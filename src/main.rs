@@ -56,11 +56,63 @@ fn inc_vol(handler: &mut SinkController, device_index: u32) {
     };
 }
 
+// enum PreVol {
+//     Query,
+//     Save
+// }
+//
+// fn pre_vol(handler: &mut SinkController, action: PreVol) -> Option<Volume> {
+//     let pre_vol_file = env::temp_dir().join("pre_vol");
+//     match action {
+//         PreVol::Query => {
+//             // read previous volume from file
+//             let saved_vol: u32 = fs::read_to_string(pre_vol_file)
+//                 .expect("Failed to read pre_vol file")
+//                 .trim()
+//                 .parse()
+//                 .expect("Failed to parse volume");
+//             Some(Volume(saved_vol))
+//         }
+//         PreVol::Save => {
+//             // save current volume to a file
+//             let pre_vol = get_vol(handler).0;
+//             println!("Saving pre_vol: {}", pre_vol);
+//             fs::write(pre_vol_file, pre_vol.to_string()).expect("Unable to write pre_vol file");
+//             None
+//         }
+//     }
+// }
+
+enum PreVolCommand {
+    Query,
+    Save
+}
+
+fn pre_vol(handler: &mut SinkController, action: PreVolCommand) -> Option<Volume> {
+    let file = env::temp_dir().join("pre_vol");
+    match action {
+        PreVolCommand::Query => {
+            // read previous volume from file
+            let bytes = fs::read(file)
+                .expect("Failed to read pre_vol file");
+            let saved_vol = u32::from_le_bytes(bytes.try_into().expect("Failed to convert bytes to u32"));
+
+            Some(Volume(saved_vol))
+        }
+        PreVolCommand::Save => {
+            // save current volume to a file
+            let pre_vol = get_vol(handler).0;
+            fs::write(file, pre_vol.to_le_bytes())
+                .expect("Unable to write pre_vol file");
+
+            None
+        }
+    }
+}
+
 fn mute(handler: &mut SinkController, device_index: u32) {
     // save previous volume to a file in case we want to fade in later
-    let pre_vol = get_vol(handler).0.to_string();
-    let open_pre_vol_file = env::temp_dir().join("pre_vol");
-    fs::write(open_pre_vol_file, pre_vol).expect("Unable to write pre_vol file");
+    pre_vol(handler, PreVolCommand::Save);
 
     // fade out
     while get_vol(handler).gt(&Volume::MUTED) {
@@ -71,9 +123,7 @@ fn mute(handler: &mut SinkController, device_index: u32) {
 
 fn unmute(handler: &mut SinkController, device_index: u32) {
     // read previous volume from file
-    let saved_str = fs::read_to_string("/tmp/pre_vol").expect("Failed to read volume");
-    let saved_val: u32 = saved_str.trim().parse().expect("Failed to parse volume");
-    let target_volume = Volume(saved_val);
+    let target_volume: Volume = pre_vol(handler, PreVolCommand::Query).unwrap();
 
     // fade in
     handler.set_device_mute_by_index(device_index, false);
