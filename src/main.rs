@@ -23,10 +23,12 @@ use pulsectl::controllers::SinkController;
 use pulsectl::controllers::types::DeviceInfo;
 use std::{env, fs, thread, time};
 
-const INC_PERCENT_STEP: f64 = 1.375 / 100.0;
-const DEC_PERCENT_STEP: f64 = 1.7 / 100.0;
-// const FADE_IN_PERCENT_STEP: f64 = 2.5 / 100.0;
-// const FADE_OUT_PERCENT_STEP: f64 = 4.0 / 100.0;
+const INC_STEPS: u8 = 10;
+const DEC_STEPS: u8 = 10;
+const INC_PERCENT_STEP: f64 = 0.5;
+const DEC_PERCENT_STEP: f64 = 0.6;
+const FADE_IN_PERCENT_STEP: f64 = 0.9;
+const FADE_OUT_PERCENT_STEP: f64 = 2.0;
 const WAIT_BETWEEN_STEPS: time::Duration = time::Duration::from_millis(26);
 
 fn get_current_vol(handler: &mut SinkController) -> Volume {
@@ -37,25 +39,6 @@ fn get_current_vol(handler: &mut SinkController) -> Volume {
     let device = default_device;
 
     device.volume.avg()
-}
-
-fn dec_vol(handler: &mut SinkController, dev_idx: u32) {
-    let mut i = 0;
-    while i <= 7 {
-        handler.decrease_device_volume_by_percent(dev_idx, DEC_PERCENT_STEP);
-        thread::sleep(WAIT_BETWEEN_STEPS);
-        i += 1;
-    };
-}
-
-fn inc_vol(handler: &mut SinkController, dev_idx: u32) {
-    handler.set_device_mute_by_index(dev_idx, false);
-    let mut i = 0;
-    while i <= 7 {
-        handler.increase_device_volume_by_percent(dev_idx, INC_PERCENT_STEP);
-        thread::sleep(WAIT_BETWEEN_STEPS);
-        i += 1;
-    };
 }
 
 enum PreVolCommand {
@@ -70,9 +53,14 @@ fn pre_vol(handler: &mut SinkController, action: PreVolCommand) -> Option<Volume
             // read previous volume from file
             let file = fs::read(file)
                 .expect("Failed to read pre_vol file");
-            let vol = u32::from_le_bytes(file.try_into().expect("Failed to convert bytes to u32"));
 
-            Some(Volume(vol))
+            let vol = u32::from_le_bytes(
+                file
+                .try_into()
+                .expect("Failed to convert file to u32")
+            );
+
+            return Some(Volume(vol))
         }
         PreVolCommand::Save => {
             // save current volume to a file
@@ -80,30 +68,61 @@ fn pre_vol(handler: &mut SinkController, action: PreVolCommand) -> Option<Volume
             fs::write(file, vol.to_le_bytes())
                 .expect("Unable to write pre_vol file");
 
-            None
+            return None
         }
     }
 }
 
+fn inc_vol(handler: &mut SinkController, dev_idx: u32, inc_percent_step: f64) {
+    let inc_percent_step = inc_percent_step / 100.0;
+    let target_volume: Volume = pre_vol(handler, PreVolCommand::Query).unwrap();
+
+    // crescendo
+    handler.set_device_mute_by_index(dev_idx, false);
+    let mut i = 0;
+    while i < INC_STEPS {
+        // stop crescendo if target volume is reached between increment steps
+        if get_current_vol(handler).ge(&target_volume) {
+            break;
+        };
+        handler.increase_device_volume_by_percent(dev_idx, inc_percent_step);
+        thread::sleep(WAIT_BETWEEN_STEPS);
+        i += 1;
+    };
+}
+
+fn dec_vol(handler: &mut SinkController, dev_idx: u32, dec_percent_step: f64) {
+    let dec_percent_step = dec_percent_step / 100.0;
+
+    // diminuendo
+    let mut i = 0;
+    while i < DEC_STEPS {
+        handler.decrease_device_volume_by_percent(dev_idx, dec_percent_step);
+        thread::sleep(WAIT_BETWEEN_STEPS);
+        i += 1;
+    };
+}
+
 fn mute(handler: &mut SinkController, dev_idx: u32) {
-    // save current volume in case we want to fade in later
+    // save current volume as a previous volume
+    // in case we want to fade in later
     pre_vol(handler, PreVolCommand::Save);
 
     // fade out
     while get_current_vol(handler).gt(&Volume::MUTED) {
-        dec_vol(handler, dev_idx);
+        dec_vol(handler, dev_idx, FADE_OUT_PERCENT_STEP);
     };
     handler.set_device_mute_by_index(dev_idx, true);
 }
 
 fn unmute(handler: &mut SinkController, dev_idx: u32) {
-    // read previous volume from file
+    // set target volume to previously saved volume
     let target_volume: Volume = pre_vol(handler, PreVolCommand::Query).unwrap();
 
     // fade in
     handler.set_device_mute_by_index(dev_idx, false);
     while get_current_vol(handler).lt(&target_volume) {
-        inc_vol(handler, dev_idx);
+        inc_vol(handler, dev_idx, FADE_IN_PERCENT_STEP);
     };
 }
 
@@ -119,6 +138,7 @@ fn toggle_mute(handler: &mut SinkController, dev_idx: u32) {
 #[derive(Parser)]
 #[command(author = "Juan de Dios Hernández, <86342863+macydnah@users.noreply.github.com>")]
 #[command(version, long_about = None, rename_all = "kebab-case")]
+#[command(propagate_version = true)]
 #[group(id = "dynamics", required = false, multiple = false)]
 struct Cli {
     #[command(subcommand)]
@@ -130,25 +150,68 @@ struct Cli {
 #[command(long_about = None, rename_all = "kebab-case")]
 enum Dynamics {
     /// increase volume in crescendo
-    #[command(visible_alias = "i", alias = "inc")]
-    Increase,
+    #[command(arg_required_else_help = false, alias = "i", alias = "inc")]
+    // #[command(visible_alias = "i", alias = "inc")]
+    Increase {
+        /// increment volume by a percentage step
+        #[arg(value_name = "INCREMENT", default_value_t = INC_PERCENT_STEP)]
+        inc_percent_step: f64,
+        // wait_between_steps: Option<f64>,
+    },
 
     /// decrease volume in diminuendo
-    #[command(visible_alias = "d", alias = "dec")]
-    Decrease,
+    #[command(alias = "d", alias = "dec")]
+    Decrease {
+        /// decrement volume by a percentage step
+        #[arg(value_name = "DECREMENT", default_value_t = DEC_PERCENT_STEP)]
+        dec_percent_step: f64,
+    },
 
     /// al niente (fade out to mute)
-    #[command(visible_alias = "m")]
-    Mute,
+    #[command(alias = "m")]
+    Mute {
+        /// decrement volume by a percentage step
+        decrement: f64,
+    },
 
     /// dal niente (fade in from mute)
-    #[command(visible_alias = "u")]
-    Unmute,
+    #[command(alias = "u")]
+    Unmute {
+        /// increment volume by a percentage step
+        increment: f64,
+    },
 
     /// toggle al niente/dal niente
-    #[command(visible_alias = "t")]
+    #[command(alias = "t")]
     ToggleMute,
 }
+
+// Increment and decrement volume by a percentage step
+// and fade in and out by a percentage step.
+// #[derive(Args)]
+// struct IncreaseArgs {
+//     increment: Option<f64>,
+//     // inc_percent_step: Option<f64>,
+//     // wait_between_steps: Option<f64>,
+// }
+// #[derive(Args)]
+// struct DecreaseArgs {
+//     decrement: Option<f64>,
+//     // dec_percent_step: Option<f64>,
+//     // wait_between_steps: Option<f64>,
+// }
+// #[derive(Args)]
+// struct FadeInArgs {
+//     increment: Option<f64>,
+//     // fade_in_percent_step: Option<f64>,
+//     // wait_between_steps: Option<f64>,
+// }
+// #[derive(Args)]
+// struct FadeOutArgs {
+//     decrement: Option<f64>,
+//     // fade_out_percent_step: Option<f64>,
+//     // wait_between_steps: Option<f64>,
+// }
 
 fn main() {
     let args = Cli::parse();
@@ -163,19 +226,20 @@ fn main() {
     let device = default_device;
 
     match args.dynamics {
-        Dynamics::Increase => {
+        // Dynamics::Increase => {
+        Dynamics::Increase { inc_percent_step } => {
             print!("Crescendo\n");
-            inc_vol(&mut handler, device.index);
+            inc_vol(&mut handler, device.index, inc_percent_step);
         }
-        Dynamics::Decrease => {
+        Dynamics::Decrease { dec_percent_step } => {
             print!("Diminuendo\n");
-            dec_vol(&mut handler, device.index);
+            dec_vol(&mut handler, device.index, dec_percent_step);
         }
-        Dynamics::Mute => {
+        Dynamics::Mute { decrement: _ } => {
             print!("Diminuendo al niente\n");
             mute(&mut handler, device.index);
         }
-        Dynamics::Unmute => {
+        Dynamics::Unmute { increment: _ } => {
             print!("Crescendo dal niente\n");
             unmute(&mut handler, device.index);
         }
