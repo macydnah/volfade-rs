@@ -130,7 +130,7 @@ struct Cli {
 #[command(long_about = None, rename_all = "kebab-case")]
 enum Dynamics {
     /// increase volume in crescendo
-    #[command(visible_alias = "i")]
+    #[command(visible_alias = "i", alias = "inc")]
     Increase,
 
     /// decrease volume in diminuendo
