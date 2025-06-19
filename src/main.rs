@@ -25,10 +25,10 @@ use std::{env, fs, thread, time};
 
 const INC_STEPS: u8 = 10;
 const DEC_STEPS: u8 = 10;
-const INC_PERCENT_STEP: f64 = 0.5;
-const DEC_PERCENT_STEP: f64 = 0.6;
-const FADE_IN_PERCENT_STEP: f64 = 0.9;
-const FADE_OUT_PERCENT_STEP: f64 = 2.0;
+const INC_PERCENT: f64 = 4.9;
+const DEC_PERCENT: f64 = 6.0;
+const FADE_IN_PERCENT_PER_STEP: f64 = 9.0;
+const FADE_OUT_PERCENT_PER_STEP: f64 = 20.0;
 const WAIT_BETWEEN_STEPS: time::Duration = time::Duration::from_millis(26);
 
 fn get_current_vol(handler: &mut SinkController) -> Volume {
