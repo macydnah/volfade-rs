@@ -56,33 +56,6 @@ fn inc_vol(handler: &mut SinkController, device_index: u32) {
     };
 }
 
-// enum PreVol {
-//     Query,
-//     Save
-// }
-//
-// fn pre_vol(handler: &mut SinkController, action: PreVol) -> Option<Volume> {
-//     let pre_vol_file = env::temp_dir().join("pre_vol");
-//     match action {
-//         PreVol::Query => {
-//             // read previous volume from file
-//             let saved_vol: u32 = fs::read_to_string(pre_vol_file)
-//                 .expect("Failed to read pre_vol file")
-//                 .trim()
-//                 .parse()
-//                 .expect("Failed to parse volume");
-//             Some(Volume(saved_vol))
-//         }
-//         PreVol::Save => {
-//             // save current volume to a file
-//             let pre_vol = get_vol(handler).0;
-//             println!("Saving pre_vol: {}", pre_vol);
-//             fs::write(pre_vol_file, pre_vol.to_string()).expect("Unable to write pre_vol file");
-//             None
-//         }
-//     }
-// }
-
 enum PreVolCommand {
     Query,
     Save
