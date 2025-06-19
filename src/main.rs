@@ -134,7 +134,7 @@ enum Dynamics {
     Increase,
 
     /// decrease volume in diminuendo
-    #[command(visible_alias = "d")]
+    #[command(visible_alias = "d", alias = "dec")]
     Decrease,
 
     /// al niente (fade out to mute)
