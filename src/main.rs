@@ -24,8 +24,8 @@ use pulsectl::controllers::types::DeviceInfo;
 use std::{env, fs, thread, time};
 
 const DEFAULT_VOLUME: Volume = Volume(65536 / 4); // 25% volume
-const DEFAULT_INCREMENT: f64 = 4.9;
-const DEFAULT_DECREMENT: f64 = 6.0;
+const DEFAULT_INCREMENT: f64 = 5.0;
+const DEFAULT_DECREMENT: f64 = 5.0;
 
 const INC_STEPS: u8 = 10;
 const DEC_STEPS: u8 = 10;
