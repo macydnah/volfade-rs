@@ -228,15 +228,25 @@ enum Dynamics {
     ToggleMute,
 }
 
-fn main() {
+fn main() -> Result<(), pulsectl::Error> {
     let args = Cli::parse();
 
     // create handler that calls functions on playback devices and apps
-    let mut handler = SinkController::create().unwrap();
+    let mut handler = match SinkController::create() {
+        Ok(h) => h,
+        Err(msg) => {
+            eprintln!("Error! Could not create PulseAudio handler:\n");
+            return Err(pulsectl::Error::Controller(msg))
+        }
+    };
 
-    let default_device: DeviceInfo = handler
-        .get_default_device()
-        .expect("Could not get default playback device.");
+    let default_device: DeviceInfo = match handler.get_default_device() {
+        Ok(d) => d,
+        Err(msg) => {
+            eprintln!("Error! Could not get default playback device:\n");
+            return Err(pulsectl::Error::Controller(msg))
+        }
+    };
 
     let device = default_device;
 
@@ -263,4 +273,5 @@ fn main() {
             toggle_mute(&mut handler, device.index);
         }
     };
+    Ok(())
 }
