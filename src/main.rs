@@ -35,13 +35,23 @@ const FADE_OUT_DECREMENT_PER_STEP: f64 = 20.0;
 
 const WAIT_BETWEEN_STEPS: time::Duration = time::Duration::from_millis(26);
 
+// fn get_current_vol(handler: &mut SinkController) -> Result<Volume, pulsectl::Error> {
 fn get_current_vol(handler: &mut SinkController) -> Volume {
     let default_device: DeviceInfo = handler
         .get_default_device()
         .expect("Could not get default playback device.");
 
+    // let default_device: DeviceInfo = match handler.get_default_device() {
+    //     Ok(d) => d,
+    //     Err(msg) => {
+    //         eprintln!("Error! Could not get default playback device:\n");
+    //         return Err(pulsectl::Error::Controller(msg))
+    //     }
+    // };
+
     let device = default_device;
 
+    // Ok(device.volume.avg())
     device.volume.avg()
 }
 
