@@ -58,13 +58,15 @@ fn get_current_vol(handler: &mut SinkController) -> Volume {
     device.volume.avg()
 }
 
-enum VolDataCommand {
-    Query,
-    SaveAsPreviousVolume
+enum ToFile {
+    FromBuffer(Volume),
+    _FromCurrentVolume
 }
 
-impl VolDataCommand {
-    fn get_cache_path() -> String {
+enum VolumeCache {}
+
+impl VolumeCache {
+    fn get_path() -> String {
         let cache_dir = match env::var("XDG_CACHE_HOME") {
             Ok(dir) => {
                 format!("{}/volfade-rs", dir)
@@ -84,39 +86,47 @@ impl VolDataCommand {
         let cache_path = cache_dir + "/" + filename;
         cache_path
     }
+    fn save(handler: &mut SinkController, t: ToFile) {
+        let vol = match t {
+            ToFile::FromBuffer(buffered_vol) => buffered_vol,
+            ToFile::_FromCurrentVolume => CurrentVolume::get(handler),
+        };
+        let vol = vol.0;
+        fs::write(VolumeCache::get_path(), vol.to_le_bytes())
+            .expect("Unable to write pre_vol file");
+    }
 }
 
-type CurrentVolume = VolDataCommand;
-type PreviousVolume = VolDataCommand;
+enum CurrentVolume {}
 
-fn vol_data(handler: &mut SinkController, cmd: VolDataCommand) -> Option<Volume> {
-    let cache: &str = &VolDataCommand::get_cache_path();
-    let file = Path::new(&cache);
+impl CurrentVolume {
+    fn get(handler: &mut SinkController) -> Volume {
+        let default_device: DeviceInfo = handler
+            .get_default_device()
+            .expect("Could not get default playback device.");
 
-    match cmd {
-        PreviousVolume::Query => {
-            // read previous volume from file
-            match fs::read(file) {
-                Ok(data) => {
-                    let vol = u32::from_le_bytes(
-                        data
-                        .try_into()
-                        .expect("Failed to convert file to u32")
-                    );
-                    return Some(Volume(vol));
-                }
-                Err(_) => return Some(DEFAULT_VOLUME)
-            };
+        let device = default_device;
+
+        device.volume.avg()
+    }
+}
+
+type PreviousVolume = VolumeCache;
+
+impl PreviousVolume {
+    fn query() -> Option<Volume> {
+        match fs::read(VolumeCache::get_path()) {
+            Ok(data) => {
+                let vol = u32::from_le_bytes(
+                    data
+                    .try_into()
+                    .expect("Failed to convert file to u32")
+                );
+                Some(Volume(vol))
+            }
+            Err(_) => Some(DEFAULT_VOLUME)
         }
-        CurrentVolume::SaveAsPreviousVolume => {
-            // save current volume to file
-            let vol = get_current_vol(handler).0;
-            fs::write(file, vol.to_le_bytes())
-                .expect("Unable to write pre_vol file");
-
-            return None
-        }
-    };
+    }
 }
 
 fn inc_vol(handler: &mut SinkController, dev_idx: u32, increment: f64, target_volume: Option<Volume>) {
@@ -155,19 +165,23 @@ fn mute(handler: &mut SinkController, dev_idx: u32, decrement_per_step: f64) {
         return;
     };
 
-    // save current volume before fading out just in case we want to fade in later
-    vol_data(handler, CurrentVolume::SaveAsPreviousVolume);
+    // store current volume before fading out
+    // VolCache::save(handler, ToFile::_FromCurrentVolume);
+    let vol_buffer: Volume = CurrentVolume::get(handler);
 
     // fade out
     while get_current_vol(handler).gt(&Volume::MUTED) {
         dec_vol(handler, dev_idx, decrement_per_step);
     };
     handler.set_device_mute_by_index(dev_idx, true);
+
+    // in case we want to fade in later
+    VolumeCache::save(handler, ToFile::FromBuffer(vol_buffer));
 }
 
 fn unmute(handler: &mut SinkController, dev_idx: u32, increment_per_step: f64) {
-    // set target volume to previously saved volume
-    let target_volume: Volume = vol_data(handler, PreviousVolume::Query).unwrap();
+    // set target volume from previously saved volume
+    let target_volume: Volume = PreviousVolume::query().unwrap();
 
     // fade in
     handler.set_device_mute_by_index(dev_idx, false);
