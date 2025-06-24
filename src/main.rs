@@ -60,28 +60,35 @@ enum VolDataCommand {
     SaveAsPreviousVolume
 }
 
+impl VolDataCommand {
+    fn get_cache_path() -> String {
+        let cache_dir = match env::var("XDG_CACHE_HOME") {
+            Ok(dir) => {
+                format!("{}/volfade-rs", dir)
+            }
+            Err(_) => {
+                let dir = env::var("HOME")
+                    .expect("HOME environment variable not set");
+                format!("{}/.cache/volfade-rs", dir)
+            }
+        };
+        if !Path::new(&cache_dir).exists() {
+            fs::create_dir(&cache_dir)
+                .expect("Failed to create cache directory");
+        };
+
+        let filename = "previous_volume";
+        let cache_path = cache_dir + "/" + filename;
+        cache_path
+    }
+}
+
 type CurrentVolume = VolDataCommand;
 type PreviousVolume = VolDataCommand;
 
 fn vol_data(handler: &mut SinkController, cmd: VolDataCommand) -> Option<Volume> {
-    let cache_dir = match env::var("XDG_CACHE_HOME") {
-        Ok(dir) => {
-            format!("{}/.cache/volfade-rs", dir)
-        }
-        Err(_) => {
-            let dir = env::var("HOME")
-                .expect("HOME environment variable not set");
-            format!("{}/.cache/volfade-rs", dir)
-        }
-    };
-    if !Path::new(&cache_dir).exists() {
-        fs::create_dir(&cache_dir)
-            .expect("Failed to create cache directory");
-    };
-
-    let filename = "previous_volume";
-    let filepath = cache_dir + "/" + filename;
-    let file = Path::new(&filepath);
+    let cache: &str = &VolDataCommand::get_cache_path();
+    let file = Path::new(&cache);
 
     match cmd {
         PreviousVolume::Query => {
