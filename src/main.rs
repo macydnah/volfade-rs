@@ -21,7 +21,7 @@ use libpulse_binding::volume::Volume;
 use pulsectl::controllers::DeviceControl;
 use pulsectl::controllers::SinkController;
 use pulsectl::controllers::types::DeviceInfo;
-use std::{env, fs, thread, time};
+use std::{env, fs, path::Path, thread, time};
 
 const DEFAULT_VOLUME: Volume = Volume(65536 / 4); // 25% volume
 const DEFAULT_INCREMENT: f64 = 5.0;
@@ -54,7 +54,25 @@ type CurrentVolume = VolDataCommand;
 type PreviousVolume = VolDataCommand;
 
 fn vol_data(handler: &mut SinkController, cmd: VolDataCommand) -> Option<Volume> {
-    let file = env::temp_dir().join("pre_vol");
+    let cache_dir = match env::var("XDG_CACHE_HOME") {
+        Ok(dir) => {
+            format!("{}/.cache/volfade-rs", dir)
+        }
+        Err(_) => {
+            let dir = env::var("HOME")
+                .expect("HOME environment variable not set");
+            format!("{}/.cache/volfade-rs", dir)
+        }
+    };
+    if !Path::new(&cache_dir).exists() {
+        fs::create_dir(&cache_dir)
+            .expect("Failed to create cache directory");
+    };
+
+    let filename = "previous_volume";
+    let filepath = cache_dir + "/" + filename;
+    let file = Path::new(&filepath);
+
     match cmd {
         PreviousVolume::Query => {
             // read previous volume from file
@@ -66,10 +84,10 @@ fn vol_data(handler: &mut SinkController, cmd: VolDataCommand) -> Option<Volume>
                         .expect("Failed to convert file to u32")
                     );
                     return Some(Volume(vol));
-                },
+                }
                 Err(_) => return Some(DEFAULT_VOLUME)
             };
-        },
+        }
         CurrentVolume::SaveAsPreviousVolume => {
             // save current volume to file
             let vol = get_current_vol(handler).0;
@@ -77,7 +95,7 @@ fn vol_data(handler: &mut SinkController, cmd: VolDataCommand) -> Option<Volume>
                 .expect("Unable to write pre_vol file");
 
             return None
-        },
+        }
     };
 }
 
